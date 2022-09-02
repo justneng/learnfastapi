@@ -1,6 +1,10 @@
 from enum import Enum
 
-from fastapi import FastAPI
+from typing import Union
+
+from fastapi import FastAPI, Query
+
+from pydantic import BaseModel
 
 
 class ModelName(str, Enum):
@@ -18,6 +22,13 @@ fake_items_db = [
 ]
 
 
+class Item(BaseModel):
+    name: str
+    description: Union[str, None] = None
+    price: float
+    tax: Union[float, None] = None
+
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -33,6 +44,59 @@ async def get_model(model_name: ModelName):
     if model_name is ModelName.neng:
         return {"model_name": model_name, "greeting": "Greeting " + model_name}
 
+
 @app.get("/items")
 async def read_item(skip: int = 0, limit: int = 10):
     return fake_items_db[skip: skip + limit]
+
+
+@app.get("/items/{item_id}/optional")
+async def read_item(item_id: str, q: Union[str, None] = None):
+    if q:
+        return {"item_id": item_id, "q": q}
+    return {"item_id": item_id}
+
+
+@app.get("/items/{item_id}/optional2")
+async def read_item(item_id: str, q: Union[str, None] = None, short: bool = False):
+    item = {"item_id": item_id}
+    if q:
+        item.update({"q": q})
+    if not short:
+        item.update({"description": "This is an amazing item that has a long description"})
+    return item
+
+
+@app.get("/users/{user_id}/items/{item_id}")
+async def read_user_item(user_id: int, item_id: int, q: Union[str, None] = None, short: bool = False):
+    item = {"item_id": item_id, "owner_id": user_id}
+    if q:
+        item.update({"q": q})
+    if not short:
+        item.update({"description": "This is an amazing item that has a long description"})
+    return item
+
+
+@app.post("/items/create")
+async def create_item(item: Item):
+    item_dict = item.dict()  # create python dictionary
+    if item.tax:
+        price_with_tax = item.price + item.tax
+        item_dict.update({"price_with_tax": price_with_tax})
+    return item_dict
+
+
+@app.post("/items/{item_id}/create")
+async def create_item(item_id: int, item: Item, q: Union[str, None] = None):
+    result = {"item_id": item_id, **item.dict()}
+    if q:
+        result.update({"q": q})
+    return result
+
+
+@app.get("/items/query/validate")
+async def read_items(q: Union[str, None] = Query(default=None, max_length=50)):
+    results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
+    if q:
+        results.update({"q": q})
+    return results
